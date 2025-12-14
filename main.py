@@ -3,8 +3,6 @@
 Mii Extractor CLI - A tool for extracting .mii files from Dolphin dumped data
 """
 
-import os
-import struct
 import csv
 from datetime import datetime, timedelta
 from enum import Enum
@@ -14,7 +12,7 @@ from typing import Optional
 import typer
 from rich.console import Console
 from rich.table import Table
-from rich.progress import Progress, TaskID
+from rich.progress import Progress
 
 app = typer.Typer(help="Extract and analyze Mii files from Wii/Dolphin files")
 console = Console()
@@ -94,7 +92,7 @@ class MiiFileReader:
 class MiiType(Enum):
     """Enum describing different Mii database types with their configurations"""
 
-    WII_PLAZA = ("RFL_DB.dat", 0x4, 74, 0, 100, "WII_PL")
+    WII_PLAZA = ("RFL_DB.dat", 0x4, 74, 0, 49, "WII_PL")
     WII_PARADE = ("RFL_DB.dat", 0x1F1E0, 64, 10, 10_000, "WII_PA")
     WIIU_MAKER = ("FFL_ODB.dat", 0x8, 92, 0, 3_000, "WIIU_MA")
     _3DS_MAKER = ("CFL_DB.dat", 0x8, 92, 0, 100, "3DS_MA")
@@ -144,8 +142,12 @@ def extract_miis_from_type(
                 while is_active and mii_count < mii_type.LIMIT:
                     mii_data = infile.read(mii_type.SIZE)
 
-                    if len(mii_data) < mii_type.SIZE or mii_data == empty_mii:
+                    # Stop if we've run out of data
+                    if len(mii_data) < mii_type.SIZE:
                         is_active = False
+                    # Skip empty Miis but continue reading
+                    elif mii_data == empty_mii:
+                        continue
                     else:
                         mii_name = f"{mii_type.PREFIX}{mii_count:05d}.mii"
                         output_path = output_dir / mii_name
@@ -368,7 +370,6 @@ def metadata(
                 color_name = reader.get_color_name(metadata[3])
 
                 gender = "Female" if metadata[0] else "Male"
-                gender_short = "F" if metadata[0] else "M"
                 birthday = (
                     f"{metadata[1]}/{metadata[2]}"
                     if metadata[1] and metadata[2]
