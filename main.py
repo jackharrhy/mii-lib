@@ -4,8 +4,6 @@ Mii Extractor CLI - A tool for extracting .mii files from Dolphin dumped data
 """
 
 import csv
-from datetime import datetime, timedelta
-from enum import Enum
 from pathlib import Path
 from typing import Optional
 
@@ -14,158 +12,18 @@ from rich.console import Console
 from rich.table import Table
 from rich.progress import Progress
 
+from mii import (
+    MiiFileReader,
+    MiiType,
+    extract_miis_from_type,
+    MiiExtractionError,
+    get_mii_mode,
+    get_mii_seconds,
+    get_mii_datetime,
+)
+
 app = typer.Typer(help="Extract and analyze Mii files from Wii/Dolphin files")
 console = Console()
-
-
-class MiiFileReader:
-    """Reader for extracting metadata from .mii files"""
-
-    def __init__(self, file_path: Path):
-        with open(file_path, "rb") as f:
-            self.data = f.read()
-
-        # Color mapping based on C# array
-        self.colors = [
-            "Red",
-            "Orange",
-            "Yellow",
-            "Green",
-            "DarkGreen",
-            "Blue",
-            "LightBlue",
-            "Pink",
-            "Purple",
-            "Brown",
-            "White",
-            "Black",
-        ]
-
-    def read_string(self, offset: int, length: int) -> str:
-        """Read UTF-16BE string from the file data"""
-        string_data = self.data[offset : offset + length]
-        # Find the first null terminator (0x0000 in UTF-16BE)
-        null_pos = string_data.find(b"\x00\x00")
-        if null_pos != -1:
-            # Ensure we align to 2-byte boundaries for UTF-16
-            if null_pos % 2 != 0:
-                null_pos -= 1
-            string_data = string_data[: null_pos + 2]
-
-        # Convert from UTF-16BE and remove null terminators
-        return string_data.decode("utf-16be").rstrip("\x00")
-
-    def read_mii_name(self) -> str:
-        """Read Mii name starting at offset 2"""
-        return self.read_string(2, 20)
-
-    def read_creator_name(self) -> str:
-        """Read creator name starting at offset 54"""
-        return self.read_string(54, 20)
-
-    def read_mii_metadata(self) -> list:
-        """Read and parse Mii metadata from first 2 bytes"""
-        # Read first 2 bytes and convert to binary string
-        metadata_bytes = self.data[0:2]
-        binary_str = "".join(format(b, "08b") for b in metadata_bytes)
-
-        # Extract metadata fields
-        is_girl = int(binary_str[1], 2)
-        birth_month = int(binary_str[2:6], 2)
-        birth_day = int(binary_str[6:11], 2)
-        favorite_color = int(binary_str[11:15], 2)
-        is_favorite = int(binary_str[15], 2)
-
-        return [is_girl, birth_month, birth_day, favorite_color, is_favorite]
-
-    def read_mii_id(self) -> bytes:
-        """Read 4-byte Mii ID starting at offset 24"""
-        return self.data[24:28]
-
-    def get_color_name(self, color_index: int) -> str:
-        """Get color name from color index"""
-        if 0 <= color_index < len(self.colors):
-            return self.colors[color_index]
-        return f"Unknown ({color_index})"
-
-
-class MiiType(Enum):
-    """Enum describing different Mii database types with their configurations"""
-
-    WII_PLAZA = ("RFL_DB.dat", 0x4, 74, 0, 49, "WII_PL")
-    WII_PARADE = ("RFL_DB.dat", 0x1F1E0, 64, 10, 10_000, "WII_PA")
-    WIIU_MAKER = ("FFL_ODB.dat", 0x8, 92, 0, 3_000, "WIIU_MA")
-    _3DS_MAKER = ("CFL_DB.dat", 0x8, 92, 0, 100, "3DS_MA")
-
-    def __init__(
-        self, source: str, offset: int, size: int, padding: int, limit: int, prefix: str
-    ):
-        self.SOURCE = source
-        self.OFFSET = offset
-        self.SIZE = size
-        self.PADDING = padding
-        self.LIMIT = limit
-        self.PREFIX = prefix
-
-    @property
-    def display_name(self) -> str:
-        """Return a human-readable name for the Mii type"""
-        return self.name.lower().replace("_", "-")
-
-
-def extract_miis_from_type(
-    mii_type: MiiType, input_file: Optional[Path] = None, output_dir: Path = Path(".")
-) -> int:
-    """Extract Miis from a specific database type"""
-    source_file = input_file or Path(mii_type.SOURCE)
-
-    if not source_file.exists():
-        console.print(f"[red]Error: {source_file} not found[/red]")
-        return 0
-
-    mii_padding = bytearray(mii_type.PADDING)
-    empty_mii = bytearray(mii_type.SIZE)
-    mii_count = 0
-    is_active = True
-
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    try:
-        with open(source_file, "rb") as infile:
-            infile.seek(mii_type.OFFSET)
-
-            with Progress() as progress:
-                task = progress.add_task(
-                    f"[cyan]Extracting {mii_type.PREFIX} Miis...", total=mii_type.LIMIT
-                )
-
-                while is_active and mii_count < mii_type.LIMIT:
-                    mii_data = infile.read(mii_type.SIZE)
-
-                    # Stop if we've run out of data
-                    if len(mii_data) < mii_type.SIZE:
-                        is_active = False
-                    # Skip empty Miis but continue reading
-                    elif mii_data == empty_mii:
-                        continue
-                    else:
-                        mii_name = f"{mii_type.PREFIX}{mii_count:05d}.mii"
-                        output_path = output_dir / mii_name
-
-                        with open(output_path, "wb") as outfile:
-                            outfile.write(mii_data + mii_padding)
-
-                        mii_count += 1
-                        progress.update(task, advance=1)
-
-    except PermissionError:
-        console.print(f"[red]Error: Permission denied accessing {source_file}[/red]")
-        return 0
-
-    console.print(
-        f"[green]Extracted {mii_count} {mii_type.PREFIX} Miis to {output_dir}[/green]"
-    )
-    return mii_count
 
 
 @app.command()
@@ -195,9 +53,27 @@ def extract(
             else:
                 selected_type = MiiType[enum_name]
 
-            total_extracted = extract_miis_from_type(
-                selected_type, input_file, output_dir
-            )
+            try:
+                with Progress() as progress:
+                    task = progress.add_task(
+                        f"[cyan]Extracting {selected_type.PREFIX} Miis...",
+                        total=selected_type.LIMIT,
+                    )
+
+                    # Wrap extraction with progress tracking
+                    extracted_files = extract_miis_from_type(
+                        selected_type, input_file, output_dir
+                    )
+                    progress.update(task, completed=len(extracted_files))
+
+                console.print(
+                    f"[green]Extracted {len(extracted_files)} {selected_type.PREFIX} Miis to {output_dir}[/green]"
+                )
+                total_extracted = len(extracted_files)
+
+            except MiiExtractionError as e:
+                console.print(f"[red]Error: {e}[/red]")
+                raise typer.Exit(1)
 
         except KeyError:
             console.print(f"[red]Error: Unknown Mii type '{mii_type}'[/red]")
@@ -209,40 +85,24 @@ def extract(
         total_extracted = 0
 
         for mii_enum in MiiType:
-            extracted = extract_miis_from_type(mii_enum, None, output_dir)
-            total_extracted += extracted
+            try:
+                with Progress() as progress:
+                    task = progress.add_task(
+                        f"[cyan]Extracting {mii_enum.PREFIX} Miis...",
+                        total=mii_enum.LIMIT,
+                    )
+
+                    extracted_files = extract_miis_from_type(mii_enum, None, output_dir)
+                    progress.update(task, completed=len(extracted_files))
+
+                total_extracted += len(extracted_files)
+            except MiiExtractionError:
+                # Continue with other types if one fails
+                pass
 
         console.print(
             f"\n[bold green]Total Miis extracted: {total_extracted}[/bold green]"
         )
-
-
-def get_mii_mode(filename: str, file_size: int) -> bool:
-    """Determine if a Mii file is from Wii (True) or 3DS/WiiU (False)"""
-    if file_size == 74:
-        return True  # Wii Mii
-    elif file_size == 92:
-        return False  # 3DS/WiiU Mii
-    else:
-        raise ValueError(f"{filename}'s format is unknown (size: {file_size})")
-
-
-def get_mii_seconds(file_handle, is_wii_mii: bool) -> int:
-    """Extract timestamp seconds from Mii file"""
-    multiplier = 4 if is_wii_mii else 2
-    seek_pos = 0x18 if is_wii_mii else 0xC
-
-    file_handle.seek(seek_pos)
-    str_id = file_handle.read(4).hex()
-    int_id = int(str_id[1:], 16)
-    return int_id * multiplier
-
-
-def get_mii_datetime(seconds: int, is_wii_mii: bool) -> datetime:
-    """Convert Mii timestamp seconds to datetime"""
-    base_date = datetime(2006, 1, 1) if is_wii_mii else datetime(2010, 1, 1)
-    shift = timedelta(seconds=seconds)
-    return base_date + shift
 
 
 @app.command()
@@ -317,25 +177,32 @@ def metadata(
 
         try:
             reader = MiiFileReader(single_file)
-
-            mii_name = reader.read_mii_name()
-            creator_name = reader.read_creator_name()
-            metadata = reader.read_mii_metadata()
-            mii_id = reader.read_mii_id()
-            color_name = reader.get_color_name(metadata[3])
+            metadata_dict = reader.read_all_metadata()
 
             table = Table(title=f"Metadata for {single_file.name}")
             table.add_column("Property", style="cyan")
             table.add_column("Value", style="green")
 
-            table.add_row("Mii Name", mii_name)
-            table.add_row("Creator Name", creator_name)
-            table.add_row("Gender", "Female" if metadata[0] else "Male")
-            table.add_row("Birth Month", str(metadata[1]) if metadata[1] else "Not set")
-            table.add_row("Birth Day", str(metadata[2]) if metadata[2] else "Not set")
-            table.add_row("Favorite Color", color_name)
-            table.add_row("Is Favorite", "Yes" if metadata[4] else "No")
-            table.add_row("Mii ID", mii_id.hex().upper())
+            table.add_row("Mii Name", metadata_dict["mii_name"])
+            table.add_row("Creator Name", metadata_dict["creator_name"])
+            table.add_row("Gender", metadata_dict["gender"])
+            table.add_row(
+                "Birth Month",
+                str(metadata_dict["birth_month"])
+                if metadata_dict["birth_month"]
+                else "Not set",
+            )
+            table.add_row(
+                "Birth Day",
+                str(metadata_dict["birth_day"])
+                if metadata_dict["birth_day"]
+                else "Not set",
+            )
+            table.add_row("Favorite Color", metadata_dict["favorite_color"])
+            table.add_row(
+                "Is Favorite", "Yes" if metadata_dict["is_favorite"] else "No"
+            )
+            table.add_row("Mii ID", metadata_dict["mii_id"])
 
             console.print(table)
 
@@ -362,33 +229,11 @@ def metadata(
         for mii_file in sorted(mii_files):
             try:
                 reader = MiiFileReader(mii_file)
-
-                mii_name = reader.read_mii_name()
-                creator_name = reader.read_creator_name()
-                metadata = reader.read_mii_metadata()
-                mii_id = reader.read_mii_id()
-                color_name = reader.get_color_name(metadata[3])
-
-                gender = "Female" if metadata[0] else "Male"
-                birthday = (
-                    f"{metadata[1]}/{metadata[2]}"
-                    if metadata[1] and metadata[2]
-                    else "Not set"
-                )
+                metadata_dict = reader.read_all_metadata()
 
                 result_data = {
                     "filename": mii_file.name,
-                    "mii_name": mii_name or "Unnamed",
-                    "creator_name": creator_name or "Unknown",
-                    "is_girl": metadata[0],
-                    "gender": gender,
-                    "birth_month": metadata[1],
-                    "birth_day": metadata[2],
-                    "birthday": birthday,
-                    "favorite_color": color_name,
-                    "favorite_color_index": metadata[3],
-                    "is_favorite": metadata[4],
-                    "mii_id": mii_id.hex().upper(),
+                    **metadata_dict,
                 }
 
                 results.append(result_data)
