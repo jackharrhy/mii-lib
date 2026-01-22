@@ -1,6 +1,5 @@
 """Mii database reader and manager"""
 
-import os
 import platform
 from pathlib import Path
 from typing import Iterator, List, Callable, Optional
@@ -27,21 +26,19 @@ def _get_known_database_locations(filename: str) -> List[Path]:
     """
     locations = []
     system = platform.system()
+    home = Path.home()
     
     if system == "Windows":
         # Windows locations
-        username = os.environ.get("USERNAME", "")
-        if username:
-            # Documents location
-            docs_path = Path(f"C:\\Users\\{username}\\Documents\\Dolphin Emulator\\Wii\\shared2\\menu\\FaceLib\\{filename}")
-            locations.append(docs_path)
-            
-            # AppData Roaming location
-            appdata_path = Path(f"C:\\Users\\{username}\\AppData\\Roaming\\Dolphin Emulator\\Wii\\shared2\\menu\\FaceLib\\{filename}")
-            locations.append(appdata_path)
+        # Documents location
+        docs_path = home / "Documents" / "Dolphin Emulator" / "Wii" / "shared2" / "menu" / "FaceLib" / filename
+        locations.append(docs_path)
+        
+        # AppData Roaming location
+        appdata_path = home / "AppData" / "Roaming" / "Dolphin Emulator" / "Wii" / "shared2" / "menu" / "FaceLib" / filename
+        locations.append(appdata_path)
     else:
         # Unix-like systems (Linux, macOS, etc.)
-        home = Path.home()
         dolphin_path = home / ".dolphin-emu" / "Wii" / "shared2" / "menu" / "FaceLib" / filename
         locations.append(dolphin_path)
     
