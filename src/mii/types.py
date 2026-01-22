@@ -16,7 +16,7 @@ class MiiType(Enum):
         >>> print(MiiType.WII_PLAZA.display_name)
     """
 
-    WII_PLAZA = ("RFL_DB.dat", 0x4, 74, 0, 49, "WII_PL")
+    WII_PLAZA = ("RFL_DB.dat", 0x4, 74, 0, 100, "WII_PL")
     WII_PARADE = ("RFL_DB.dat", 0x1F1E0, 64, 10, 10_000, "WII_PA")
     WIIU_MAKER = ("FFL_ODB.dat", 0x8, 92, 0, 3_000, "WIIU_MA")
     _3DS_MAKER = ("CFL_DB.dat", 0x8, 92, 0, 100, "3DS_MA")
