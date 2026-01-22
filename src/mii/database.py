@@ -1,5 +1,7 @@
 """Mii database reader and manager"""
 
+import os
+import platform
 from pathlib import Path
 from typing import Iterator, List, Callable, Optional
 
@@ -12,6 +14,38 @@ class MiiDatabaseError(Exception):
     """Exception raised during Mii database operations"""
 
     pass
+
+
+def _get_known_database_locations(filename: str) -> List[Path]:
+    """Get list of known locations where database files might be found
+    
+    Args:
+        filename: The database filename to look for (e.g., "RFL_DB.dat")
+    
+    Returns:
+        List of potential paths where the database file might exist
+    """
+    locations = []
+    system = platform.system()
+    
+    if system == "Windows":
+        # Windows locations
+        username = os.environ.get("USERNAME", "")
+        if username:
+            # Documents location
+            docs_path = Path(f"C:\\Users\\{username}\\Documents\\Dolphin Emulator\\Wii\\shared2\\menu\\FaceLib\\{filename}")
+            locations.append(docs_path)
+            
+            # AppData Roaming location
+            appdata_path = Path(f"C:\\Users\\{username}\\AppData\\Roaming\\Dolphin Emulator\\Wii\\shared2\\menu\\FaceLib\\{filename}")
+            locations.append(appdata_path)
+    else:
+        # Unix-like systems (Linux, macOS, etc.)
+        home = Path.home()
+        dolphin_path = home / ".dolphin-emu" / "Wii" / "shared2" / "menu" / "FaceLib" / filename
+        locations.append(dolphin_path)
+    
+    return locations
 
 
 class MiiDatabase:
@@ -33,8 +67,20 @@ class MiiDatabase:
             >>> database = MiiDatabase(Path("RFL_DB.dat"), MiiType.WII_PLAZA)
             >>> print(len(database))
         """
+        # If the provided path doesn't exist, check known locations
         if not file_path.exists():
-            raise MiiDatabaseError(f"{file_path} not found")
+            known_locations = _get_known_database_locations(file_path.name)
+            found_path = None
+            
+            for location in known_locations:
+                if location.exists():
+                    found_path = location
+                    break
+            
+            if found_path:
+                file_path = found_path
+            else:
+                raise MiiDatabaseError(f"{file_path} not found")
 
         self.file_path = file_path
         self.mii_type = mii_type
