@@ -608,13 +608,13 @@
 <p>Library and CLI for extracting <code>.mii</code> files from misc. Wii/Dolphin data dumps, and extracting information from them (name, fav. color, gender, etc.)</p>
 <p>This is all based around reading from a <a href="https://wiibrew.org/wiki//shared2/menu/FaceLib/RFL_DB.dat"><code>RFL_DB.dat</code> file</a>.</p>
 <h2 id="finding-your-database-file">Finding Your Database File</h2>
-<p>After having used the Mii Channel in Dolphin, and assuming its saved the contents of it to disk at some point, you'll find it in one of the following folders:</p>
+<p>The library automatically checks for database files in known Dolphin Emulator locations:</p>
 <ul>
 <li><code>C:\Users\&lt;Your Username&gt;\Documents\Dolphin Emulator\Wii\shared2\menu\FaceLib\</code></li>
 <li><code>C:\Users\&lt;Your Username&gt;\AppData\Roaming\Dolphin Emulator\Wii\shared2\menu\FaceLib\</code></li>
 <li><code>~/.dolphin-emu/Wii/shared2/menu/FaceLib/</code></li>
 </ul>
-<p>If none of these exist, check where Dolphin is saving its data to in its settings.</p>
+<p>If the database file is not in your current directory, the library will automatically search these locations. If none of these exist, check where Dolphin is saving its data to in its settings, and provide the full path when creating a <code>MiiDatabase</code>.</p>
 <h2 id="installation">Installation</h2>
 <ul>
 <li>Library only: <code>pip install mii-lib</code></li>
