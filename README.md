@@ -38,13 +38,13 @@ More complete examples can be found in [examples/library_usage.py](./examples/li
 
 This is all based around reading from a [`RFL_DB.dat` file](https://wiibrew.org/wiki//shared2/menu/FaceLib/RFL_DB.dat).
 
-After having used the Mii Channel in Dolphin, and assuming its saved the contents of it to disk at some point, you'll find it in one of the following folders:
+The library automatically checks for database files in known Dolphin Emulator locations:
 
 - `C:\Users\<Your Username>\Documents\Dolphin Emulator\Wii\shared2\menu\FaceLib\`
 - `C:\Users\<Your Username>\AppData\Roaming\Dolphin Emulator\Wii\shared2\menu\FaceLib\`
 - `~/.dolphin-emu/Wii/shared2/menu/FaceLib/`
 
-If none of these exist, check where Dolphin is savings its data to in its settings.
+If the database file is not in your current directory, the library will automatically search these locations. If none of these exist, check where Dolphin is saving its data to in its settings, and provide the full path when creating a `MiiDatabase`.
 
 ---
 
